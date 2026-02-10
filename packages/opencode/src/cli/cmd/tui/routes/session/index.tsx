@@ -78,6 +78,7 @@ import { PermissionPrompt } from "./permission"
 import { QuestionPrompt } from "./question"
 import { DialogExportOptions } from "../../ui/dialog-export-options"
 import { formatTranscript } from "../../util/transcript"
+import { DialogChildSessionList } from "../../component/dialog-child-session-list"
 import { UI } from "@/cli/ui.ts"
 import { useTuiConfig } from "../../context/tui-config"
 
@@ -160,7 +161,6 @@ export function Session() {
 
   const wide = createMemo(() => dimensions().width > 120)
   const sidebarVisible = createMemo(() => {
-    if (session()?.parentID) return false
     if (sidebarOpen()) return true
     if (sidebar() === "auto" && wide()) return true
     return false
@@ -965,6 +965,22 @@ export function Session() {
         dialog.clear()
       }),
     },
+    {
+      title: "Switch subagent session",
+      value: "session.child.list",
+      keybind: "session_child_list",
+      category: "Session",
+      hidden: true,
+      onSelect: (dialog) => {
+        const childList = children()
+        if (childList.length <= 1) {
+          toast.show({ variant: "warning", message: "No subagent sessions found", duration: 2000 })
+          dialog.clear()
+          return
+        }
+        dialog.replace(() => <DialogChildSessionList sessionID={route.sessionID} />)
+      },
+    },
   ])
 
   const revertInfo = createMemo(() => session()?.revert)
@@ -1037,6 +1053,9 @@ export function Session() {
       <box flexDirection="row">
         <box flexGrow={1} paddingBottom={1} paddingLeft={2} paddingRight={2} gap={1}>
           <Show when={session()}>
+            <Show when={showHeader() && (!sidebarVisible() || !wide() || !!session()?.parentID)}>
+              <Header />
+            </Show>
             <scrollbox
               ref={(r) => (scroll = r)}
               viewportOptions={{
