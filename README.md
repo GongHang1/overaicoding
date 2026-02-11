@@ -7,11 +7,10 @@
     </picture>
   </a>
 </p>
-<p align="center">The open source AI coding agent.</p>
+<p align="center">The open source AI coding agent — custom fork with enhanced features.</p>
 <p align="center">
-  <a href="https://opencode.ai/discord"><img alt="Discord" src="https://img.shields.io/discord/1391832426048651334?style=flat-square&label=discord" /></a>
-  <a href="https://www.npmjs.com/package/opencode-ai"><img alt="npm" src="https://img.shields.io/npm/v/opencode-ai?style=flat-square" /></a>
-  <a href="https://github.com/anomalyco/opencode/actions/workflows/publish.yml"><img alt="Build status" src="https://img.shields.io/github/actions/workflow/status/anomalyco/opencode/publish.yml?style=flat-square&branch=dev" /></a>
+  <a href="https://github.com/GongHang1/overaicoding"><img alt="GitHub" src="https://img.shields.io/badge/fork-overaicoding-blue?style=flat-square" /></a>
+  <a href="https://github.com/anomalyco/opencode"><img alt="upstream" src="https://img.shields.io/badge/upstream-opencode-gray?style=flat-square" /></a>
 </p>
 
 <p align="center">
@@ -42,6 +41,53 @@
 [![OpenCode Terminal UI](packages/web/src/assets/lander/screenshot.png)](https://opencode.ai)
 
 ---
+
+> **Note**: This is a custom fork of [opencode](https://github.com/anomalyco/opencode) with additional features. It is **not** built by the OpenCode team and is not affiliated with them.
+
+## Custom Features
+
+### Subagent Sidebar Navigation
+
+Enhanced sidebar with subagent (child session) visibility and hover navigation:
+
+- **Sidebar always visible** in subagent sessions (upstream hides it)
+- **Hover-to-navigate**: mouse over subagent entries to instantly preview their content
+- **Root session anchoring**: sidebar data anchored to root session, eliminating flicker during navigation
+- **Collapsible Subagents section** with parent link for easy navigation back
+- **Child session list dialog**: press the configured keybind to open a full list of child sessions
+
+### Thinking/Reasoning Translation
+
+Automatically translate AI thinking/reasoning blocks to your target language with bilingual display:
+
+- Translated content displayed prominently, original collapsible via "Show original"
+- Language detection to skip translation when content is already in target language
+- Runtime toggle via `/translate-thinking` slash command
+- Supports zh-CN, ja, ko target languages
+
+**Configuration** (`~/.config/opencode/opencode.json`):
+
+```json
+{
+  "thinking_translation": {
+    "enabled": true,
+    "model": "google/antigravity-gemini-3-flash",
+    "target_language": "zh-CN"
+  }
+}
+```
+
+| Field | Description | Default |
+|-------|-------------|---------|
+| `enabled` | Enable automatic translation | `false` |
+| `model` | Translation model in `provider/model-id` format | — |
+| `target_language` | Target language code | `"zh-CN"` |
+
+---
+
+## Upstream Documentation
+
+The sections below are from the upstream [opencode](https://github.com/anomalyco/opencode) project.
 
 ### Installation
 
