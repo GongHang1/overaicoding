@@ -615,6 +615,26 @@ export function Session() {
       },
     },
     {
+      title: "Toggle thinking translation",
+      value: "session.toggle.translation",
+      keybind: "toggle_translation",
+      category: "Session",
+      slash: {
+        name: "translate-thinking",
+        aliases: ["toggle-translation"],
+      },
+      onSelect: (dialog) => {
+        import("@/session/translate").then(({ ThinkingTranslation }) => {
+          const enabled = ThinkingTranslation.toggleEnabled()
+          toast.show({
+            message: enabled ? "Thinking translation enabled" : "Thinking translation disabled",
+            variant: "success",
+          })
+        })
+        dialog.clear()
+      },
+    },
+    {
       title: showDetails() ? "Hide tool details" : "Show tool details",
       value: "session.toggle.actions",
       keybind: "tool_details",
@@ -1436,6 +1456,17 @@ function ReasoningPart(props: { last: boolean; part: ReasoningPart; message: Ass
     // OpenRouter sends encrypted reasoning data that appears as [REDACTED]
     return props.part.text.replace("[REDACTED]", "").trim()
   })
+
+  // 从 metadata 中读取翻译结果（响应式：翻译完成后自动更新）
+  const translation = createMemo(() => {
+    return props.part.metadata?.translation as
+      | { text: string; language: string; timestamp: number }
+      | undefined
+  })
+
+  // 原文折叠状态
+  const [showOriginal, setShowOriginal] = createSignal(false)
+
   return (
     <Show when={content() && ctx.showThinking()}>
       <box
@@ -1447,15 +1478,46 @@ function ReasoningPart(props: { last: boolean; part: ReasoningPart; message: Ass
         customBorderChars={SplitBorder.customBorderChars}
         borderColor={theme.backgroundElement}
       >
-        <code
-          filetype="markdown"
-          drawUnstyledText={false}
-          streaming={true}
-          syntaxStyle={subtleSyntax()}
-          content={"_Thinking:_ " + content()}
-          conceal={ctx.conceal()}
-          fg={theme.textMuted}
-        />
+        {/* 翻译后的内容（突出显示） */}
+        <Show when={translation()}>
+          <code
+            filetype="markdown"
+            drawUnstyledText={false}
+            streaming={false}
+            syntaxStyle={subtleSyntax()}
+            content={"_Thinking:_ " + translation()!.text}
+            conceal={ctx.conceal()}
+            fg={theme.textMuted}
+          />
+        </Show>
+
+        {/* 原文（翻译存在时折叠，无翻译时正常显示） */}
+        <Show when={!translation() || showOriginal()}>
+          <code
+            filetype="markdown"
+            drawUnstyledText={false}
+            streaming={!translation()}
+            syntaxStyle={subtleSyntax()}
+            content={translation() ? content() : "_Thinking:_ " + content()}
+            conceal={ctx.conceal()}
+            fg={theme.textMuted}
+          />
+        </Show>
+
+        {/* 翻译存在时，显示折叠/展开原文的切换 */}
+        <Show when={translation()}>
+          <text
+            fg={theme.textMuted}
+            onMouseDown={() => setShowOriginal((prev) => !prev)}
+          >
+            {showOriginal() ? "▼ Hide original" : "▶ Show original"}
+          </text>
+        </Show>
+
+        {/* 翻译中提示（thinking 完成但翻译尚未返回时，仅在翻译功能启用且未被跳过时显示） */}
+        <Show when={!translation() && !props.part.metadata?.translation_skipped && props.part.time?.end && ctx.sync.data.config.thinking_translation?.enabled}>
+          <text fg={theme.textMuted}> Translating...</text>
+        </Show>
       </box>
     </Show>
   )
@@ -1464,15 +1526,18 @@ function ReasoningPart(props: { last: boolean; part: ReasoningPart; message: Ass
 function TextPart(props: { last: boolean; part: TextPart; message: AssistantMessage }) {
   const ctx = use()
   const { theme, syntax } = useTheme()
+
+  const content = createMemo(() => props.part.text.trim())
+
   return (
-    <Show when={props.part.text.trim()}>
-      <box id={"text-" + props.part.id} paddingLeft={3} marginTop={1} flexShrink={0}>
+    <Show when={content()}>
+      <box id={"text-" + props.part.id} paddingLeft={3} marginTop={1} flexShrink={0} flexDirection="column">
         <Switch>
           <Match when={Flag.OPENCODE_EXPERIMENTAL_MARKDOWN}>
             <markdown
               syntaxStyle={syntax()}
               streaming={true}
-              content={props.part.text.trim()}
+              content={content()}
               conceal={ctx.conceal()}
               fg={theme.markdownText}
               bg={theme.background}
@@ -1484,7 +1549,7 @@ function TextPart(props: { last: boolean; part: TextPart; message: AssistantMess
               drawUnstyledText={false}
               streaming={true}
               syntaxStyle={syntax()}
-              content={props.part.text.trim()}
+              content={content()}
               conceal={ctx.conceal()}
               fg={theme.text}
             />

@@ -1617,6 +1617,20 @@ export type Config = {
      */
     mcp_timeout?: number
   }
+  thinking_translation?: {
+    /**
+     * Enable automatic translation of thinking/reasoning content
+     */
+    enabled?: boolean
+    /**
+     * Model to use for translation, format: provider/model-id, e.g. anthropic/claude-haiku-4-0
+     */
+    model?: string
+    /**
+     * Target language for translation
+     */
+    target_language?: string
+  }
 }
 
 export type BadRequestError = {

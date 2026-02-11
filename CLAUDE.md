@@ -139,3 +139,40 @@ packages/
 2. **SolidJS 响应性**: 使用 `createMemo` / `createSignal` 时注意依赖追踪。避免在 `<Show>` 条件和 DOM 事件之间产生循环依赖（参见 Parent 链接闪烁问题）。
 
 3. **构建验证**: 本地修改后先运行 `bun turbo typecheck` 确认类型无误，再提交。pre-push hook 会自动检查，失败则推送被阻止。
+
+4. **Zod schema 陷阱**: `z.object({...}).optional().default({})` 会使 output type 中字段变为 required，导致与空对象合并冲突。如果配置段整体可选，只用 `.optional()` 不加 `.default({})`。
+
+5. **AI SDK 参数**: `generateText()` 的 token 限制参数是 `maxOutputTokens`（不是 `maxTokens`）。
+
+---
+
+## 自定义功能: Thinking 双语翻译
+
+**状态**: 仅 ReasoningPart 翻译（TextPart 翻译已回退）
+**详细改动记录**: `.claude/context/thinking-translation-changes.md`
+
+**改动文件** (5 个):
+
+| 文件 | 改动类型 | 说明 |
+|------|---------|------|
+| `packages/opencode/src/config/config.ts` | 修改 | `thinking_translation` 配置段 + `toggle_translation` 快捷键 |
+| `packages/opencode/src/session/translate.ts` | 新增 | 翻译服务（`doTranslate` 核心 + `translate` reasoning 翻译 + `isAlreadyInTargetLanguage` 语言检测） |
+| `packages/opencode/src/session/processor.ts` | 修改 | 仅 `reasoning-end` 后异步触发翻译（`text-end` 翻译已移除） |
+| `.../routes/session/index.tsx` | 修改 | ReasoningPart 双语渲染 + toggle 命令（TextPart 保持原始无翻译） |
+| `packages/sdk/js/src/v2/gen/types.gen.ts` | 修改 | 类型同步 |
+
+**TextPart 翻译回退原因**:
+1. 已是目标语言的中文文本被错误翻译，原文被折叠到 "Show original" 后面
+2. 添加 `isAlreadyInTargetLanguage` 语言检测 + `translation_skipped` 标记后，"Translating..." 仍永远显示
+3. 最终出现 `AI_InvalidPromptError: Invalid prompt: The messages must be a ModelMessage[]` 报错
+
+**配置示例** (`opencode.jsonc`):
+```jsonc
+{
+  "thinking_translation": {
+    "enabled": true,
+    "model": "google/antigravity-gemini-3-flash",
+    "target_language": "zh-CN"
+  }
+}
+```

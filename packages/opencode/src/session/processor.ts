@@ -15,7 +15,8 @@ import { SessionCompaction } from "./compaction"
 import { Permission } from "@/permission"
 import { Question } from "@/question"
 import { PartID } from "./schema"
-import type { SessionID, MessageID } from "./schema"
+import type { SessionID } from "./schema"
+import { ThinkingTranslation } from "./translate"
 
 export namespace SessionProcessor {
   const DOOM_LOOP_THRESHOLD = 3
@@ -105,6 +106,10 @@ export namespace SessionProcessor {
                     }
                     if (value.providerMetadata) part.metadata = value.providerMetadata
                     await Session.updatePart(part)
+
+                    // 异步触发翻译（不阻塞主流程）
+                    ThinkingTranslation.translate(part).catch(() => {})
+
                     delete reasoningMap[value.id]
                   }
                   break
