@@ -155,16 +155,36 @@ packages/
 
 | 文件 | 改动类型 | 说明 |
 |------|---------|------|
-| `packages/opencode/src/config/config.ts` | 修改 | `thinking_translation` 配置段 + `toggle_translation` 快捷键 |
-| `packages/opencode/src/session/translate.ts` | 新增 | 翻译服务（`doTranslate` 核心 + `translate` reasoning 翻译 + `isAlreadyInTargetLanguage` 语言检测） |
+| `packages/opencode/src/config/config.ts` | 修改 | `thinking_translation` 配置段（含 `max_output_tokens`）+ `toggle_translation` 快捷键 |
+| `packages/opencode/src/session/translate.ts` | 新增 | 翻译服务（`doTranslate` 核心 + `translate` reasoning 翻译 + `isAlreadyInTargetLanguage` 语言检测 + `bestEffortUpdatePart` 安全写入 + `markSkipped` 幂等标记） |
 | `packages/opencode/src/session/processor.ts` | 修改 | 仅 `reasoning-end` 后异步触发翻译（`text-end` 翻译已移除） |
-| `.../routes/session/index.tsx` | 修改 | ReasoningPart 双语渲染 + toggle 命令（TextPart 保持原始无翻译） |
-| `packages/sdk/js/src/v2/gen/types.gen.ts` | 修改 | 类型同步 |
+| `.../routes/session/index.tsx` | 修改 | ReasoningPart 双语渲染 + toggle 命令 + hover 高亮按钮（TextPart 保持原始无翻译） |
+| `packages/sdk/js/src/v2/gen/types.gen.ts` | 修改 | 类型同步（含 `max_output_tokens`） |
 
 **TextPart 翻译回退原因**:
 1. 已是目标语言的中文文本被错误翻译，原文被折叠到 "Show original" 后面
 2. 添加 `isAlreadyInTargetLanguage` 语言检测 + `translation_skipped` 标记后，"Translating..." 仍永远显示
 3. 最终出现 `AI_InvalidPromptError: Invalid prompt: The messages must be a ModelMessage[]` 报错
+
+**已修复的 Bug（2026-02-12）**:
+
+| Bug | 严重性 | 修复 |
+|-----|-------|------|
+| `toggleEnabled()` 首次 toggle 无法正确取反 config 默认值 | P0 | 改为 async，首次调用读取 config 并取反 |
+| 旧会话 / 翻译禁用时 "Translating..." 永驻 | P0 | 所有早退路径写入 `translation_skipped` + UI 加回 config 兜底条件 |
+| 翻译失败后 "Translating..." 永驻 | P0 | catch 块写入 `translation_skipped` + `translation_error` |
+| `maxOutputTokens` 32768 对小模型不安全 | P0 | 默认 8192，新增 `max_output_tokens` 配置项（256-32768） |
+| 早退路径 `updatePart` 无 `.catch()` 可中断主流程 | P0 | 提取 `bestEffortUpdatePart()` 方法 |
+| 禁用时每个 part 多一次写入（写放大） | P1 | 提取 `markSkipped()` 幂等方法，已有标记不重复写 |
+| toggle Promise 链无 `.catch()` | P2 | 添加 `.catch()` + error toast |
+| 翻译失败丢失原因 | P2 | catch 块额外写入 `translation_error` |
+| "Show original" 点击时选中周围文字 | UI | `onMouseDown` 改为 `onMouseUp` + selection 检查 |
+| "Show original" 无 hover 反馈 | UI | 添加 `onMouseOver`/`onMouseOut` + 高亮 + 粗体 |
+
+**已知未修复问题**:
+- `isAlreadyInTargetLanguage` 不支持非 CJK 目标语言（低优先级）
+- `TRANSLATION_META_KEYS` 中 `translation_error` 已在使用（之前标记为 dead code，现已修复）
+- config.ts 中 `global()` 与项目配置的 `.json`/`.jsonc` 优先级相反（极低概率触发，涉及上游代码结构）
 
 **配置示例** (`opencode.jsonc`):
 ```jsonc
@@ -172,7 +192,8 @@ packages/
   "thinking_translation": {
     "enabled": true,
     "model": "google/antigravity-gemini-3-flash",
-    "target_language": "zh-CN"
+    "target_language": "zh-CN",
+    "max_output_tokens": 16384  // 可选，默认 8192，最大 32768
   }
 }
 ```

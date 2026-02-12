@@ -601,8 +601,17 @@ export namespace MessageV2 {
       return false
     })()
 
-    const toModelOutput = (options: { toolCallId: string; input: unknown; output: unknown }) => {
-      const output = options.output
+    // 过滤翻译相关的元数据键，避免污染 providerMetadata
+    const TRANSLATION_META_KEYS = new Set(["translation", "translation_skipped", "translation_error"])
+    function stripTranslationMeta(metadata: Record<string, any> | undefined): Record<string, any> | undefined {
+      if (!metadata) return metadata
+      const keys = Object.keys(metadata)
+      if (!keys.some((k) => TRANSLATION_META_KEYS.has(k))) return metadata
+      const cleaned = Object.fromEntries(keys.filter((k) => !TRANSLATION_META_KEYS.has(k)).map((k) => [k, metadata[k]]))
+      return Object.keys(cleaned).length > 0 ? cleaned : undefined
+    }
+
+    const toModelOutput = (output: unknown) => {
       if (typeof output === "string") {
         return { type: "text", value: output }
       }
@@ -706,7 +715,7 @@ export namespace MessageV2 {
             assistantMessage.parts.push({
               type: "text",
               text: part.text,
-              ...(differentModel ? {} : { providerMetadata: part.metadata }),
+              ...(differentModel ? {} : { providerMetadata: stripTranslationMeta(part.metadata) }),
             })
           if (part.type === "step-start")
             assistantMessage.parts.push({
@@ -715,8 +724,10 @@ export namespace MessageV2 {
           if (part.type === "tool") {
             toolNames.add(part.tool)
             if (part.state.status === "completed") {
-              const outputText = part.state.time.compacted ? "[Old tool result content cleared]" : part.state.output
-              const attachments = part.state.time.compacted || options?.stripMedia ? [] : (part.state.attachments ?? [])
+              const outputText = part.state.time.compacted
+                ? "[Old tool result content cleared]"
+                : (part.state.output ?? "")
+              const attachments = part.state.time.compacted ? [] : (part.state.attachments ?? [])
 
               // For providers that don't support media in tool results, extract media files
               // (images, PDFs) to be sent as a separate user message
@@ -769,7 +780,7 @@ export namespace MessageV2 {
             assistantMessage.parts.push({
               type: "reasoning",
               text: part.text,
-              ...(differentModel ? {} : { providerMetadata: part.metadata }),
+              ...(differentModel ? {} : { providerMetadata: stripTranslationMeta(part.metadata) }),
             })
           }
         }

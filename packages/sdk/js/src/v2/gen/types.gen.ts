@@ -1630,6 +1630,10 @@ export type Config = {
      * Target language for translation
      */
     target_language?: string
+    /**
+     * Max output tokens for translation model (default 8192, max 32768)
+     */
+    max_output_tokens?: number
   }
 }
 

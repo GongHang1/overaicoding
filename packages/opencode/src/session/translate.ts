@@ -59,10 +59,12 @@ export namespace ThinkingTranslation {
     runtimeEnabled = enabled
   }
 
-  export function toggleEnabled() {
+  export async function toggleEnabled() {
     if (runtimeEnabled === undefined) {
-      // 首次 toggle 时取反配置值
-      runtimeEnabled = false
+      // 首次 toggle 时读取配置值并取反
+      const cfg = await Config.get()
+      const currentlyEnabled = cfg.thinking_translation?.enabled ?? false
+      runtimeEnabled = !currentlyEnabled
     } else {
       runtimeEnabled = !runtimeEnabled
     }
@@ -73,6 +75,18 @@ export namespace ThinkingTranslation {
     if (runtimeEnabled !== undefined) return runtimeEnabled
     const cfg = await Config.get()
     return cfg.thinking_translation?.enabled ?? false
+  }
+
+  // maxOutputTokens 默认上限，可通过配置覆盖
+  const DEFAULT_MAX_OUTPUT_TOKENS = 8192
+
+  // best-effort 写入 part metadata，失败不抛错
+  async function bestEffortUpdatePart(part: MessageV2.ReasoningPart | MessageV2.TextPart) {
+    try {
+      await Session.updatePart(part)
+    } catch (e) {
+      log.error("failed to update part metadata", { partID: part.id, error: e })
+    }
   }
 
   // 通用翻译核心逻辑
@@ -90,18 +104,27 @@ export namespace ThinkingTranslation {
       const language = await Provider.getLanguage(model)
 
       const targetLang = translationCfg.target_language ?? "zh-CN"
+      // maxOutputTokens 上限：优先使用配置值，默认 8192，最高不超过 32768
+      const maxTokensCap = Math.min(translationCfg.max_output_tokens ?? DEFAULT_MAX_OUTPUT_TOKENS, 32768)
+      // 最低 1024 token 保底：部分模型 tokenizer 对中文/日文字符消耗 2-3 token/字，
+      // 短文本（<1024 chars）翻译也需要足够余量避免截断
+      const outputTokens = Math.max(Math.min(text.length, maxTokensCap), 1024)
 
       const result = await generateText({
         model: language,
-        messages: [
-          {
-            role: "system",
-            content: `You are a professional translator. Translate the following text to ${targetLang}. Output ONLY the translation, preserving all technical terms, code snippets, and formatting. Do not add any commentary or explanation.`,
-          },
-          { role: "user", content: text },
-        ],
-        maxOutputTokens: Math.min(text.length * 2, 8192),
+        system: `You are a professional translator. Translate the following text to ${targetLang}. Output ONLY the translation, preserving all technical terms, code snippets, and formatting. Do not add any commentary or explanation.`,
+        prompt: text,
+        maxOutputTokens: outputTokens,
       })
+
+      if (result.finishReason === "length") {
+        log.warn("translation may be truncated", {
+          partID: part.id,
+          textLength: text.length,
+          maxOutputTokens: outputTokens,
+          finishReason: result.finishReason,
+        })
+      }
 
       // 将翻译结果写入 part.metadata
       part.metadata = {
@@ -115,22 +138,48 @@ export namespace ThinkingTranslation {
       await Session.updatePart(part)
       log.info("translation completed", { partID: part.id, type: part.type, length: result.text.length })
     } catch (e) {
-      // 翻译失败不影响主流程，静默记录
+      // 翻译失败不影响主流程，记录错误原因并标记，避免 UI 永久显示 "Translating..."
+      const errorMsg = e instanceof Error ? e.message : String(e)
       log.error("translation failed", { partID: part.id, type: part.type, error: e })
+      part.metadata = {
+        ...part.metadata,
+        translation_skipped: true,
+        translation_error: errorMsg,
+      }
+      await bestEffortUpdatePart(part)
     }
+  }
+
+  // 标记为跳过翻译（幂等：已有标记时不重复写）
+  async function markSkipped(part: MessageV2.ReasoningPart) {
+    if (part.metadata?.translation_skipped || part.metadata?.translation) return
+    part.metadata = { ...part.metadata, translation_skipped: true }
+    await bestEffortUpdatePart(part)
   }
 
   // 翻译 reasoning/thinking 块
   export async function translate(part: MessageV2.ReasoningPart) {
     const cfg = await Config.get()
     const translationCfg = cfg.thinking_translation
-    if (!translationCfg?.enabled && runtimeEnabled !== true) return
-    if (runtimeEnabled === false) return
-    if (!translationCfg?.model) return
+    if (!translationCfg?.enabled && runtimeEnabled !== true) {
+      await markSkipped(part)
+      return
+    }
+    if (runtimeEnabled === false) {
+      await markSkipped(part)
+      return
+    }
+    if (!translationCfg?.model) {
+      await markSkipped(part)
+      return
+    }
 
     const text = part.text.replace("[REDACTED]", "").trim()
     // 过短的 thinking 不翻译
-    if (!text || text.length < 10) return
+    if (!text || text.length < 10) {
+      await markSkipped(part)
+      return
+    }
 
     const targetLang = translationCfg.target_language ?? "zh-CN"
     // 如果文本已经是目标语言，跳过翻译，写入标记通知 UI
@@ -139,8 +188,7 @@ export namespace ThinkingTranslation {
         partID: part.id,
         targetLang,
       })
-      part.metadata = { ...part.metadata, translation_skipped: true }
-      await Session.updatePart(part)
+      await markSkipped(part)
       return
     }
 

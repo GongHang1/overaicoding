@@ -624,12 +624,14 @@ export function Session() {
         aliases: ["toggle-translation"],
       },
       onSelect: (dialog) => {
-        import("@/session/translate").then(({ ThinkingTranslation }) => {
-          const enabled = ThinkingTranslation.toggleEnabled()
+        import("@/session/translate").then(async ({ ThinkingTranslation }) => {
+          const enabled = await ThinkingTranslation.toggleEnabled()
           toast.show({
             message: enabled ? "Thinking translation enabled" : "Thinking translation disabled",
             variant: "success",
           })
+        }).catch((e) => {
+          toast.show({ message: "Failed to toggle translation", variant: "error" })
         })
         dialog.clear()
       },
@@ -1466,6 +1468,9 @@ function ReasoningPart(props: { last: boolean; part: ReasoningPart; message: Ass
 
   // 原文折叠状态
   const [showOriginal, setShowOriginal] = createSignal(false)
+  // toggle 按钮 hover 状态
+  const [toggleHover, setToggleHover] = createSignal(false)
+  const renderer = useRenderer()
 
   return (
     <Show when={content() && ctx.showThinking()}>
@@ -1507,15 +1512,27 @@ function ReasoningPart(props: { last: boolean; part: ReasoningPart; message: Ass
         {/* 翻译存在时，显示折叠/展开原文的切换 */}
         <Show when={translation()}>
           <text
-            fg={theme.textMuted}
-            onMouseDown={() => setShowOriginal((prev) => !prev)}
+            fg={toggleHover() ? theme.text : theme.textMuted}
+            onMouseOver={() => setToggleHover(true)}
+            onMouseOut={() => setToggleHover(false)}
+            onMouseUp={() => {
+              if (renderer.getSelection()?.getSelectedText()) return
+              setShowOriginal((prev) => !prev)
+            }}
           >
-            {showOriginal() ? "▼ Hide original" : "▶ Show original"}
+            {toggleHover()
+              ? <span style={{ bold: true }}>{showOriginal() ? "▼ Hide original" : "▶ Show original"}</span>
+              : (showOriginal() ? "▼ Hide original" : "▶ Show original")}
           </text>
         </Show>
 
-        {/* 翻译中提示（thinking 完成但翻译尚未返回时，仅在翻译功能启用且未被跳过时显示） */}
-        <Show when={!translation() && !props.part.metadata?.translation_skipped && props.part.time?.end && ctx.sync.data.config.thinking_translation?.enabled}>
+        {/* 翻译中提示：仅当翻译功能已启用（config 或 runtime）、后端尚未标记、thinking 已完成时显示 */}
+        <Show when={
+          !translation()
+          && !props.part.metadata?.translation_skipped
+          && props.part.time?.end
+          && (ctx.sync.data.config.thinking_translation?.enabled || ctx.sync.data.config.thinking_translation?.model)
+        }>
           <text fg={theme.textMuted}> Translating...</text>
         </Show>
       </box>
