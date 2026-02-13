@@ -78,7 +78,8 @@ export namespace ThinkingTranslation {
   }
 
   // maxOutputTokens 默认上限，可通过配置覆盖
-  const DEFAULT_MAX_OUTPUT_TOKENS = 8192
+  // 8192 对长 thinking 块翻译远远不够（英文→中文 token 膨胀约 1.5-2x）
+  const DEFAULT_MAX_OUTPUT_TOKENS = 16384
 
   // best-effort 写入 part metadata，失败不抛错
   async function bestEffortUpdatePart(part: MessageV2.ReasoningPart | MessageV2.TextPart) {
@@ -89,7 +90,49 @@ export namespace ThinkingTranslation {
     }
   }
 
-  // 通用翻译核心逻辑
+  const SYSTEM_PROMPT_SINGLE = (targetLang: string) =>
+    `You are a professional translator. Translate the following text to ${targetLang}. Output ONLY the translation, preserving all technical terms, code snippets, and formatting. Do not add any commentary or explanation.`
+
+  const SYSTEM_PROMPT_CHUNKED = (targetLang: string) =>
+    `You are a professional translator. Translate the following text to ${targetLang}. Output ONLY the translation, preserving all technical terms, code snippets, and formatting. Do not add any commentary or explanation. This is part of a larger text being translated in segments — maintain consistent terminology and style.`
+
+  // 将长文本按段落/句子边界分割成块
+  function splitIntoChunks(text: string, maxCharsPerChunk: number): string[] {
+    if (text.length <= maxCharsPerChunk) return [text]
+
+    const chunks: string[] = []
+    let remaining = text
+
+    while (remaining.length > 0) {
+      if (remaining.length <= maxCharsPerChunk) {
+        chunks.push(remaining)
+        break
+      }
+
+      // 优先在段落边界（双换行）分割
+      let splitAt = remaining.lastIndexOf("\n\n", maxCharsPerChunk)
+      // 退而在单换行处分割
+      if (splitAt < maxCharsPerChunk * 0.3) {
+        splitAt = remaining.lastIndexOf("\n", maxCharsPerChunk)
+      }
+      // 再退在句号处分割
+      if (splitAt < maxCharsPerChunk * 0.3) {
+        splitAt = remaining.lastIndexOf(". ", maxCharsPerChunk)
+        if (splitAt > 0) splitAt += 1 // 包含句号
+      }
+      // 最后直接在字符位置截断
+      if (splitAt < maxCharsPerChunk * 0.3) {
+        splitAt = maxCharsPerChunk
+      }
+
+      chunks.push(remaining.slice(0, splitAt).trimEnd())
+      remaining = remaining.slice(splitAt).trimStart()
+    }
+
+    return chunks
+  }
+
+  // 通用翻译核心逻辑（支持分块翻译长文本）
   async function doTranslate(
     part: MessageV2.ReasoningPart | MessageV2.TextPart,
     text: string,
@@ -104,39 +147,90 @@ export namespace ThinkingTranslation {
       const language = await Provider.getLanguage(model)
 
       const targetLang = translationCfg.target_language ?? "zh-CN"
-      // maxOutputTokens 上限：优先使用配置值，默认 8192，最高不超过 32768
-      const maxTokensCap = Math.min(translationCfg.max_output_tokens ?? DEFAULT_MAX_OUTPUT_TOKENS, 32768)
-      // 最低 1024 token 保底：部分模型 tokenizer 对中文/日文字符消耗 2-3 token/字，
-      // 短文本（<1024 chars）翻译也需要足够余量避免截断
-      const outputTokens = Math.max(Math.min(text.length, maxTokensCap), 1024)
+      // maxOutputTokens 上限：优先使用配置值，默认 16384，最高不超过 65536
+      const maxTokensCap = Math.min(translationCfg.max_output_tokens ?? DEFAULT_MAX_OUTPUT_TOKENS, 65536)
 
-      const result = await generateText({
-        model: language,
-        system: `You are a professional translator. Translate the following text to ${targetLang}. Output ONLY the translation, preserving all technical terms, code snippets, and formatting. Do not add any commentary or explanation.`,
-        prompt: text,
-        maxOutputTokens: outputTokens,
-      })
+      // 估算翻译输出所需 token 数：
+      // 英文约 4 字符/token → 源文本约 text.length/4 个 token 的语义内容
+      // 中文翻译后每个中文字符消耗 2-3 token → 输出 token ≈ 源语义量 × 2
+      // 安全估算：text.length × 0.5（= text.length/4 × 2）
+      const estimatedTokens = Math.ceil(text.length * 0.5)
 
-      if (result.finishReason === "length") {
-        log.warn("translation may be truncated", {
+      let translatedText: string
+
+      if (estimatedTokens <= maxTokensCap) {
+        // 单次翻译：直接使用 maxTokensCap 作为输出上限（不用 text.length 裁剪）
+        const result = await generateText({
+          model: language,
+          system: SYSTEM_PROMPT_SINGLE(targetLang),
+          prompt: text,
+          maxOutputTokens: maxTokensCap,
+        })
+
+        if (result.finishReason === "length") {
+          log.warn("translation may be truncated (single-shot)", {
+            partID: part.id,
+            textLength: text.length,
+            maxOutputTokens: maxTokensCap,
+            estimatedTokens,
+          })
+        }
+
+        translatedText = result.text
+      } else {
+        // 分块翻译：文本太长，单次翻译会截断
+        // 每块最大字符数 = maxTokensCap / 0.5 = maxTokensCap × 2
+        const maxCharsPerChunk = maxTokensCap * 2
+        const chunks = splitIntoChunks(text, maxCharsPerChunk)
+
+        log.info("translating in chunks", {
           partID: part.id,
           textLength: text.length,
-          maxOutputTokens: outputTokens,
-          finishReason: result.finishReason,
+          chunks: chunks.length,
+          maxTokensCap,
         })
+
+        const translatedChunks: string[] = []
+        for (const chunk of chunks) {
+          const result = await generateText({
+            model: language,
+            system: SYSTEM_PROMPT_CHUNKED(targetLang),
+            prompt: chunk,
+            maxOutputTokens: maxTokensCap,
+          })
+
+          if (result.finishReason === "length") {
+            log.warn("translation chunk may be truncated", {
+              partID: part.id,
+              chunkIndex: translatedChunks.length,
+              chunkLength: chunk.length,
+              maxOutputTokens: maxTokensCap,
+            })
+          }
+
+          translatedChunks.push(result.text)
+        }
+
+        translatedText = translatedChunks.join("\n\n")
       }
 
       // 将翻译结果写入 part.metadata
       part.metadata = {
         ...part.metadata,
         translation: {
-          text: result.text,
+          text: translatedText,
           language: targetLang,
           timestamp: Date.now(),
         },
       }
       await Session.updatePart(part)
-      log.info("translation completed", { partID: part.id, type: part.type, length: result.text.length })
+      log.info("translation completed", {
+        partID: part.id,
+        type: part.type,
+        sourceLength: text.length,
+        translatedLength: translatedText.length,
+        chunked: estimatedTokens > maxTokensCap,
+      })
     } catch (e) {
       // 翻译失败不影响主流程，记录错误原因并标记，避免 UI 永久显示 "Translating..."
       const errorMsg = e instanceof Error ? e.message : String(e)

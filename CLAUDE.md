@@ -173,7 +173,8 @@ packages/
 | `toggleEnabled()` 首次 toggle 无法正确取反 config 默认值 | P0 | 改为 async，首次调用读取 config 并取反 |
 | 旧会话 / 翻译禁用时 "Translating..." 永驻 | P0 | 所有早退路径写入 `translation_skipped` + UI 加回 config 兜底条件 |
 | 翻译失败后 "Translating..." 永驻 | P0 | catch 块写入 `translation_skipped` + `translation_error` |
-| `maxOutputTokens` 32768 对小模型不安全 | P0 | 默认 8192，新增 `max_output_tokens` 配置项（256-32768） |
+| 长 thinking 块翻译截断 | P0 | `text.length` 被当作 token 数导致 maxOutputTokens 不足；默认值 8192→16384，硬上限 32768→65536，增加分块翻译机制 |
+| `maxOutputTokens` 对小模型不安全 | P0（已修复） | 默认 8192→16384，新增 `max_output_tokens` 配置项（256-65536），分块翻译兜底 |
 | 早退路径 `updatePart` 无 `.catch()` 可中断主流程 | P0 | 提取 `bestEffortUpdatePart()` 方法 |
 | 禁用时每个 part 多一次写入（写放大） | P1 | 提取 `markSkipped()` 幂等方法，已有标记不重复写 |
 | toggle Promise 链无 `.catch()` | P2 | 添加 `.catch()` + error toast |
@@ -193,7 +194,7 @@ packages/
     "enabled": true,
     "model": "google/antigravity-gemini-3-flash",
     "target_language": "zh-CN",
-    "max_output_tokens": 16384  // 可选，默认 8192，最大 32768
+    "max_output_tokens": 16384  // 可选，默认 16384，最大 65536
   }
 }
 ```

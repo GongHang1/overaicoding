@@ -814,11 +814,7 @@ export namespace Config {
       tips_toggle: z.string().optional().default("<leader>h").describe("Toggle tips on home screen"),
       plugin_manager: z.string().optional().default("none").describe("Open plugin manager dialog"),
       display_thinking: z.string().optional().default("none").describe("Toggle thinking blocks visibility"),
-      toggle_translation: z
-        .string()
-        .optional()
-        .default("none")
-        .describe("Toggle thinking translation visibility"),
+      toggle_translation: z.string().optional().default("none").describe("Toggle thinking translation visibility"),
     })
     .strict()
     .meta({
@@ -1076,16 +1072,23 @@ export namespace Config {
         .optional(),
       thinking_translation: z
         .object({
-          enabled: z.boolean().optional().default(false).describe("Enable automatic translation of thinking/reasoning content"),
+          enabled: z
+            .boolean()
+            .optional()
+            .default(false)
+            .describe("Enable automatic translation of thinking/reasoning content"),
           model: z
             .string()
             .optional()
             .describe("Model to use for translation, format: provider/model-id, e.g. anthropic/claude-haiku-4-0"),
-          target_language: z
-            .string()
+          target_language: z.string().optional().default("zh-CN").describe("Target language for translation"),
+          max_output_tokens: z
+            .number()
+            .int()
+            .min(256)
+            .max(65536)
             .optional()
-            .default("zh-CN")
-            .describe("Target language for translation"),
+            .describe("Max output tokens for translation model (default 16384, max 65536)"),
         })
         .optional(),
       experimental: z

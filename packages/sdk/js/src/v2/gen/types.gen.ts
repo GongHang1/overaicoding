@@ -1631,7 +1631,7 @@ export type Config = {
      */
     target_language?: string
     /**
-     * Max output tokens for translation model (default 8192, max 32768)
+     * Max output tokens for translation model (default 16384, max 65536)
      */
     max_output_tokens?: number
   }
