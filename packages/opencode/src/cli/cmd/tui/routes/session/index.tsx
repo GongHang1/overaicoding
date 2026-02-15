@@ -1511,8 +1511,7 @@ function ReasoningPart(props: { last: boolean; part: ReasoningPart; message: Ass
 
         {/* 翻译存在时，显示折叠/展开原文的切换 */}
         <Show when={translation()}>
-          <text
-            fg={toggleHover() ? theme.text : theme.textMuted}
+          <box
             onMouseOver={() => setToggleHover(true)}
             onMouseOut={() => setToggleHover(false)}
             onMouseUp={() => {
@@ -1520,10 +1519,10 @@ function ReasoningPart(props: { last: boolean; part: ReasoningPart; message: Ass
               setShowOriginal((prev) => !prev)
             }}
           >
-            {toggleHover()
-              ? <span style={{ bold: true }}>{showOriginal() ? "▼ Hide original" : "▶ Show original"}</span>
-              : (showOriginal() ? "▼ Hide original" : "▶ Show original")}
-          </text>
+            <text fg={toggleHover() ? theme.text : theme.textMuted}>
+              {showOriginal() ? "▼ Hide original" : "▶ Show original"}
+            </text>
+          </box>
         </Show>
 
         {/* 翻译中提示：仅当翻译功能已启用（config 或 runtime）、后端尚未标记、thinking 已完成时显示 */}

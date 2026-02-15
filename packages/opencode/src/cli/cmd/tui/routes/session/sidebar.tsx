@@ -27,6 +27,15 @@ export function Sidebar(props: { sessionID: string; overlay?: boolean }) {
     subagents: true,
   })
 
+  // 折叠区域防抖：300ms 内同一 section 只响应一次 toggle，防止终端鼠标事件连续触发
+  const lastToggleTime: Record<string, number> = {}
+  const toggleSection = (key: keyof typeof expanded) => {
+    const now = Date.now()
+    if (now - (lastToggleTime[key] ?? 0) < 300) return
+    lastToggleTime[key] = now
+    setExpanded(key, !expanded[key])
+  }
+
   const tree = createMemo(() =>
     buildSessionTree({
       currentSessionID: props.sessionID,
@@ -150,7 +159,7 @@ export function Sidebar(props: { sessionID: string; overlay?: boolean }) {
                 <box
                   flexDirection="row"
                   gap={1}
-                  onMouseDown={() => mcpEntries().length > 2 && setExpanded("mcp", !expanded.mcp)}
+                  onMouseUp={() => mcpEntries().length > 2 && toggleSection("mcp")}
                 >
                   <Show when={mcpEntries().length > 2}>
                     <text fg={theme.text}>{expanded.mcp ? "▼" : "▶"}</text>
@@ -210,7 +219,7 @@ export function Sidebar(props: { sessionID: string; overlay?: boolean }) {
               <box
                 flexDirection="row"
                 gap={1}
-                onMouseDown={() => sync.data.lsp.length > 2 && setExpanded("lsp", !expanded.lsp)}
+                onMouseUp={() => sync.data.lsp.length > 2 && toggleSection("lsp")}
               >
                 <Show when={sync.data.lsp.length > 2}>
                   <text fg={theme.text}>{expanded.lsp ? "▼" : "▶"}</text>
@@ -255,7 +264,7 @@ export function Sidebar(props: { sessionID: string; overlay?: boolean }) {
                 <box
                   flexDirection="row"
                   gap={1}
-                  onMouseDown={() => setExpanded("subagents", !expanded.subagents)}
+                  onMouseUp={() => toggleSection("subagents")}
                 >
                   <text fg={theme.text}>{expanded.subagents ? "▼" : "▶"}</text>
                   <text fg={theme.text}>
@@ -348,7 +357,7 @@ export function Sidebar(props: { sessionID: string; overlay?: boolean }) {
                 <box
                   flexDirection="row"
                   gap={1}
-                  onMouseDown={() => todo().length > 2 && setExpanded("todo", !expanded.todo)}
+                  onMouseUp={() => todo().length > 2 && toggleSection("todo")}
                 >
                   <Show when={todo().length > 2}>
                     <text fg={theme.text}>{expanded.todo ? "▼" : "▶"}</text>
@@ -367,7 +376,7 @@ export function Sidebar(props: { sessionID: string; overlay?: boolean }) {
                 <box
                   flexDirection="row"
                   gap={1}
-                  onMouseDown={() => diff().length > 2 && setExpanded("diff", !expanded.diff)}
+                  onMouseUp={() => diff().length > 2 && toggleSection("diff")}
                 >
                   <Show when={diff().length > 2}>
                     <text fg={theme.text}>{expanded.diff ? "▼" : "▶"}</text>
