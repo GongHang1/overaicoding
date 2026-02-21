@@ -57,6 +57,22 @@ git rebase dev
 git push origin feature/subagent-toolbar --force-with-lease
 ```
 
+### ⚠️ Rebase 后必须清理 TypeScript 缓存
+
+**已知问题**：`git rebase` 后直接运行 `bun turbo typecheck` 会因 tsgo 增量编译缓存（`.tsbuildinfo`）过期导致假阳性类型错误。SDK 包的 `composite: true` 配置会产生 `.tsbuildinfo` 文件，rebase 后这些文件与新源码不一致。
+
+**解决方法**：rebase 后使用 `typecheck:clean` 代替普通 `typecheck`：
+
+```bash
+# rebase 后验证类型（自动清理 tsbuildinfo + 强制重跑）
+bun run typecheck:clean
+
+# 等价于：
+# find . -name '*.tsbuildinfo' -not -path '*/node_modules/*' -delete && bun turbo typecheck --force
+```
+
+**注意**：pre-push hook 调用的是 `bun turbo typecheck`（不带 `--force`），如果 rebase 后首次 push 被 hook 拦截，先手动跑一次 `bun run typecheck:clean`，之后 turbo 缓存会更新为正确状态，后续普通 typecheck 和 push 就不会再报错。
+
 ### 关键注意事项
 
 | 事项 | 说明 |
@@ -138,7 +154,7 @@ packages/
 
 2. **SolidJS 响应性**: 使用 `createMemo` / `createSignal` 时注意依赖追踪。避免在 `<Show>` 条件和 DOM 事件之间产生循环依赖（参见 Parent 链接闪烁问题）。
 
-3. **构建验证**: 本地修改后先运行 `bun turbo typecheck` 确认类型无误，再提交。pre-push hook 会自动检查，失败则推送被阻止。
+3. **构建验证**: 本地修改后先运行 `bun turbo typecheck` 确认类型无误，再提交。pre-push hook 会自动检查，失败则推送被阻止。**rebase 后必须用 `bun run typecheck:clean` 代替**（详见「上游同步流程」的缓存说明）。
 
 4. **Zod schema 陷阱**: `z.object({...}).optional().default({})` 会使 output type 中字段变为 required，导致与空对象合并冲突。如果配置段整体可选，只用 `.optional()` 不加 `.default({})`。
 
