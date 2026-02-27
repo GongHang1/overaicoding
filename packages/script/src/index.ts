@@ -5,6 +5,9 @@ import path from "path"
 const rootPkgPath = path.resolve(import.meta.dir, "../../../package.json")
 const rootPkg = await Bun.file(rootPkgPath).json()
 const expectedBunVersion = rootPkg.packageManager?.split("@")[1]
+// 读取 packages/opencode/package.json 的版本，用于本地构建的版本号
+const opencodePkgPath = path.resolve(import.meta.dir, "../../opencode/package.json")
+const opencodePkg = await Bun.file(opencodePkgPath).json()
 
 if (!expectedBunVersion) {
   throw new Error("packageManager field not found in root package.json")
@@ -27,6 +30,9 @@ const CHANNEL = await (async () => {
   if (env.OPENCODE_CHANNEL) return env.OPENCODE_CHANNEL
   if (env.OPENCODE_BUMP) return "latest"
   if (env.OPENCODE_VERSION && !env.OPENCODE_VERSION.startsWith("0.0.0-")) return "latest"
+  // 非 CI 环境（本地开发）默认 "latest"，避免用分支名生成 0.0.0-{branch}-{ts} 版本
+  // 导致 bun.lock 写入 npm 上不存在的 preview 版本，引发 bun install 失败
+  if (!process.env.CI && !process.env.GITHUB_ACTIONS) return "latest"
   return await $`git branch --show-current`.text().then((x) => x.trim())
 })()
 const IS_PREVIEW = CHANNEL !== "latest"
@@ -34,6 +40,8 @@ const IS_PREVIEW = CHANNEL !== "latest"
 const VERSION = await (async () => {
   if (env.OPENCODE_VERSION) return env.OPENCODE_VERSION
   if (IS_PREVIEW) return `0.0.0-${CHANNEL}-${new Date().toISOString().slice(0, 16).replace(/[-:T]/g, "")}`
+  // 非 CI 本地构建且无 OPENCODE_BUMP：直接使用本地 package.json 版本，避免网络请求和版本自增
+  if (!process.env.CI && !process.env.GITHUB_ACTIONS && !env.OPENCODE_BUMP) return opencodePkg.version
   const version = await fetch("https://registry.npmjs.org/opencode-ai/latest")
     .then((res) => {
       if (!res.ok) throw new Error(res.statusText)
