@@ -83,6 +83,12 @@ bun run typecheck:clean
 | 冲突解决原则 | 版本号取上游最新值，项目名保留 `overaicoding`，功能代码保留我方实现 |
 | typecheck | 每次 push 会触发 pre-push hook 执行全量 typecheck，必须 12/12 通过 |
 
+### 上游同步历史
+
+| 日期 | 上游版本 | 本地分支 | 主要变更 | 冲突文件 | 备注 |
+|------|---------|---------|---------|---------|------|
+| 2026-03-04 | v1.2.11 → v1.2.16 | my_dev | Workspace 重构、keybinds 去 leader 前缀、opentui 升级到 0.1.86 | `config.ts`（快捷键冲突）、`package.json`（版本号）、`message-v2.ts`（stripMedia 移除）、`bun.lock` | `session_child_list` 快捷键从 `<leader>down` 改为 `<leader>l` 以避免与上游 `session_child_first` 冲突 |
+
 ---
 
 ## 自定义功能分支
@@ -100,7 +106,7 @@ bun run typecheck:clean
 | `packages/opencode/bin/overaicoding` | 新增 | 可执行文件入口 |
 | `packages/opencode/script/build.ts` | 修改 | 构建输出重命名 |
 | `packages/web/package.json` | 修改 | 依赖名同步 |
-| `packages/opencode/src/config/config.ts` | 修改 | 新增 `session_child_list` 快捷键 |
+| `packages/opencode/src/config/config.ts` | 修改 | 新增 `session_child_list` 快捷键（`<leader>l`，原为 `<leader>down` 但与上游 `session_child_first` 冲突后调整） |
 | `packages/sdk/js/src/v2/gen/types.gen.ts` | 修改 | KeybindsConfig 补充 `session_child_list` 字段 |
 | `.../routes/session/index.tsx` | 修改 | sidebar 在子会话中保持可见、Header 在子会话中显示 |
 | `.../routes/session/header.tsx` | 重写 | 紧凑单行布局 + 子会话导航按钮 + 版本号显示 |
