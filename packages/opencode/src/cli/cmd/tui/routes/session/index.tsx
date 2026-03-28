@@ -61,6 +61,7 @@ import { DialogTimeline } from "./dialog-timeline"
 import { DialogForkFromTimeline } from "./dialog-fork-from-timeline"
 import { DialogSessionRename } from "../../component/dialog-session-rename"
 import { Sidebar } from "./sidebar"
+import { Header } from "./header"
 import { SubagentFooter } from "./subagent-footer.tsx"
 import { Flag } from "@/flag/flag"
 import { LANGUAGE_EXTENSIONS } from "@/lsp/language"
@@ -158,6 +159,7 @@ export function Session() {
   const [diffWrapMode] = kv.signal<"word" | "none">("diff_wrap_mode", "word")
   const [animationsEnabled, setAnimationsEnabled] = kv.signal("animations_enabled", true)
   const [showGenericToolOutput, setShowGenericToolOutput] = kv.signal("generic_tool_output_visibility", false)
+  const [showHeader, setShowHeader] = kv.signal("header_visible", true)
 
   const wide = createMemo(() => dimensions().width > 120)
   const sidebarVisible = createMemo(() => {
@@ -624,15 +626,17 @@ export function Session() {
         aliases: ["toggle-translation"],
       },
       onSelect: (dialog) => {
-        import("@/session/translate").then(async ({ ThinkingTranslation }) => {
-          const enabled = await ThinkingTranslation.toggleEnabled()
-          toast.show({
-            message: enabled ? "Thinking translation enabled" : "Thinking translation disabled",
-            variant: "success",
+        import("@/session/translate")
+          .then(async ({ ThinkingTranslation }) => {
+            const enabled = await ThinkingTranslation.toggleEnabled()
+            toast.show({
+              message: enabled ? "Thinking translation enabled" : "Thinking translation disabled",
+              variant: "success",
+            })
           })
-        }).catch((e) => {
-          toast.show({ message: "Failed to toggle translation", variant: "error" })
-        })
+          .catch((e) => {
+            toast.show({ message: "Failed to toggle translation", variant: "error" })
+          })
         dialog.clear()
       },
     },
@@ -1461,9 +1465,7 @@ function ReasoningPart(props: { last: boolean; part: ReasoningPart; message: Ass
 
   // 从 metadata 中读取翻译结果（响应式：翻译完成后自动更新）
   const translation = createMemo(() => {
-    return props.part.metadata?.translation as
-      | { text: string; language: string; timestamp: number }
-      | undefined
+    return props.part.metadata?.translation as { text: string; language: string; timestamp: number } | undefined
   })
 
   // 原文折叠状态
@@ -1526,12 +1528,14 @@ function ReasoningPart(props: { last: boolean; part: ReasoningPart; message: Ass
         </Show>
 
         {/* 翻译中提示：仅当翻译功能已启用（config 或 runtime）、后端尚未标记、thinking 已完成时显示 */}
-        <Show when={
-          !translation()
-          && !props.part.metadata?.translation_skipped
-          && props.part.time?.end
-          && (ctx.sync.data.config.thinking_translation?.enabled || ctx.sync.data.config.thinking_translation?.model)
-        }>
+        <Show
+          when={
+            !translation() &&
+            !props.part.metadata?.translation_skipped &&
+            props.part.time?.end &&
+            (ctx.sync.data.config.thinking_translation?.enabled || ctx.sync.data.config.thinking_translation?.model)
+          }
+        >
           <text fg={theme.textMuted}> Translating...</text>
         </Show>
       </box>
