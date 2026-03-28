@@ -2,17 +2,14 @@ import { useSync } from "@tui/context/sync"
 import { createMemo, createSignal, For, Show, Switch, Match } from "solid-js"
 import { createStore } from "solid-js/store"
 import { useTheme } from "../../context/theme"
-import { Locale } from "@/util/locale"
-import path from "path"
 import type { AssistantMessage } from "@opencode-ai/sdk/v2"
-import { Global } from "@/global"
 import { Installation } from "@/installation"
-import { useKeybind } from "../../context/keybind"
 import { useDirectory } from "../../context/directory"
 import { useKV } from "../../context/kv"
 import { TodoItem } from "../../component/todo-item"
 import { buildSessionTree, sessionRunState } from "../../lib/session-tree"
 import { useRoute } from "../../context/route"
+import { TuiPluginRuntime } from "../../plugin"
 
 export function Sidebar(props: { sessionID: string; overlay?: boolean }) {
   const sync = useSync()
@@ -138,14 +135,22 @@ export function Sidebar(props: { sessionID: string; overlay?: boolean }) {
           }}
         >
           <box flexShrink={0} gap={1} paddingRight={1}>
-            <box paddingRight={1}>
-              <text fg={theme.text}>
-                <b>{rootSession().title}</b>
-              </text>
-              <Show when={rootSession().share?.url}>
-                <text fg={theme.textMuted}>{rootSession().share!.url}</text>
-              </Show>
-            </box>
+            <TuiPluginRuntime.Slot
+              name="sidebar_title"
+              mode="single_winner"
+              session_id={props.sessionID}
+              title={rootSession().title}
+              share_url={rootSession().share?.url}
+            >
+              <box paddingRight={1}>
+                <text fg={theme.text}>
+                  <b>{rootSession().title}</b>
+                </text>
+                <Show when={rootSession().share?.url}>
+                  <text fg={theme.textMuted}>{rootSession().share!.url}</text>
+                </Show>
+              </box>
+            </TuiPluginRuntime.Slot>
             <box>
               <text fg={theme.text}>
                 <b>Context</b>
@@ -156,11 +161,7 @@ export function Sidebar(props: { sessionID: string; overlay?: boolean }) {
             </box>
             <Show when={mcpEntries().length > 0}>
               <box>
-                <box
-                  flexDirection="row"
-                  gap={1}
-                  onMouseUp={() => mcpEntries().length > 2 && toggleSection("mcp")}
-                >
+                <box flexDirection="row" gap={1} onMouseUp={() => mcpEntries().length > 2 && toggleSection("mcp")}>
                   <Show when={mcpEntries().length > 2}>
                     <text fg={theme.text}>{expanded.mcp ? "▼" : "▶"}</text>
                   </Show>
@@ -216,11 +217,7 @@ export function Sidebar(props: { sessionID: string; overlay?: boolean }) {
               </box>
             </Show>
             <box>
-              <box
-                flexDirection="row"
-                gap={1}
-                onMouseUp={() => sync.data.lsp.length > 2 && toggleSection("lsp")}
-              >
+              <box flexDirection="row" gap={1} onMouseUp={() => sync.data.lsp.length > 2 && toggleSection("lsp")}>
                 <Show when={sync.data.lsp.length > 2}>
                   <text fg={theme.text}>{expanded.lsp ? "▼" : "▶"}</text>
                 </Show>
@@ -261,11 +258,7 @@ export function Sidebar(props: { sessionID: string; overlay?: boolean }) {
             {/* Subagents Section */}
             <Show when={subagentSessions().length > 0}>
               <box>
-                <box
-                  flexDirection="row"
-                  gap={1}
-                  onMouseUp={() => toggleSection("subagents")}
-                >
+                <box flexDirection="row" gap={1} onMouseUp={() => toggleSection("subagents")}>
                   <text fg={theme.text}>{expanded.subagents ? "▼" : "▶"}</text>
                   <text fg={theme.text}>
                     <b>Subagents</b>
@@ -296,7 +289,9 @@ export function Sidebar(props: { sessionID: string; overlay?: boolean }) {
                     <text fg={!isInSubagent() ? theme.primary : theme.accent}>↑</text>
                     <text fg={!isInSubagent() ? theme.primary : parentHovered() ? theme.text : theme.text}>
                       {!isInSubagent() ? <span style={{ bold: true }}>Parent</span> : <b>Parent</b>}
-                      <span style={{ fg: !isInSubagent() ? theme.primary : parentHovered() ? theme.text : theme.textMuted }}>
+                      <span
+                        style={{ fg: !isInSubagent() ? theme.primary : parentHovered() ? theme.text : theme.textMuted }}
+                      >
                         {" "}
                         {(() => {
                           const title = rootSession()?.title ?? "Primary"
@@ -341,7 +336,10 @@ export function Sidebar(props: { sessionID: string; overlay?: boolean }) {
                           <text flexShrink={0} fg={statusColor()}>
                             {statusIcon()}
                           </text>
-                          <text fg={isCurrent() ? theme.primary : hovered() ? theme.text : theme.textMuted} wrapMode="word">
+                          <text
+                            fg={isCurrent() ? theme.primary : hovered() ? theme.text : theme.textMuted}
+                            wrapMode="word"
+                          >
                             {isCurrent() || hovered() ? <span style={{ bold: true }}>{label()}</span> : label()}
                             {status() === "waiting" && <span style={{ fg: theme.accent }}> (waiting)</span>}
                           </text>
@@ -354,11 +352,7 @@ export function Sidebar(props: { sessionID: string; overlay?: boolean }) {
             </Show>
             <Show when={todo().length > 0 && todo().some((t) => t.status !== "completed")}>
               <box>
-                <box
-                  flexDirection="row"
-                  gap={1}
-                  onMouseUp={() => todo().length > 2 && toggleSection("todo")}
-                >
+                <box flexDirection="row" gap={1} onMouseUp={() => todo().length > 2 && toggleSection("todo")}>
                   <Show when={todo().length > 2}>
                     <text fg={theme.text}>{expanded.todo ? "▼" : "▶"}</text>
                   </Show>
@@ -373,11 +367,7 @@ export function Sidebar(props: { sessionID: string; overlay?: boolean }) {
             </Show>
             <Show when={diff().length > 0}>
               <box>
-                <box
-                  flexDirection="row"
-                  gap={1}
-                  onMouseUp={() => diff().length > 2 && toggleSection("diff")}
-                >
+                <box flexDirection="row" gap={1} onMouseUp={() => diff().length > 2 && toggleSection("diff")}>
                   <Show when={diff().length > 2}>
                     <text fg={theme.text}>{expanded.diff ? "▼" : "▶"}</text>
                   </Show>
@@ -408,6 +398,7 @@ export function Sidebar(props: { sessionID: string; overlay?: boolean }) {
                 </Show>
               </box>
             </Show>
+            <TuiPluginRuntime.Slot name="sidebar_content" session_id={props.sessionID} />
           </box>
         </scrollbox>
 
@@ -449,13 +440,15 @@ export function Sidebar(props: { sessionID: string; overlay?: boolean }) {
             <span style={{ fg: theme.textMuted }}>{directory().split("/").slice(0, -1).join("/")}/</span>
             <span style={{ fg: theme.text }}>{directory().split("/").at(-1)}</span>
           </text>
-          <text fg={theme.textMuted}>
-            <span style={{ fg: theme.success }}>•</span> <b>Open</b>
-            <span style={{ fg: theme.text }}>
-              <b>Code</b>
-            </span>{" "}
-            <span>{Installation.VERSION}</span>
-          </text>
+          <TuiPluginRuntime.Slot name="sidebar_footer" mode="single_winner" session_id={props.sessionID}>
+            <text fg={theme.textMuted}>
+              <span style={{ fg: theme.success }}>•</span> <b>Open</b>
+              <span style={{ fg: theme.text }}>
+                <b>Code</b>
+              </span>{" "}
+              <span>{Installation.VERSION}</span>
+            </text>
+          </TuiPluginRuntime.Slot>
         </box>
       </box>
     </Show>

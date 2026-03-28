@@ -1436,13 +1436,39 @@ PART_MAPPING["reasoning"] = function ReasoningPartDisplay(props) {
   const streaming = createMemo(
     () => props.message.role === "assistant" && typeof (props.message as AssistantMessage).time.completed !== "number",
   )
-  const text = () => part().text.trim()
+  const text = () => part().text.replace("[REDACTED]", "").trim()
   const throttledText = createPacedValue(text, streaming)
+
+  const translation = createMemo(() => {
+    return part().metadata?.translation as { text: string; language: string; timestamp: number } | undefined
+  })
+
+  const [showOriginal, setShowOriginal] = createSignal(false)
 
   return (
     <Show when={throttledText()}>
       <div data-component="reasoning-part">
-        <Markdown text={throttledText()} cacheKey={part().id} streaming={streaming()} />
+        <Show when={translation()}>
+          <Markdown text={translation()!.text} cacheKey={`${part().id}-translation`} streaming={false} />
+        </Show>
+        <Show when={!translation() || showOriginal()}>
+          <Markdown
+            text={translation() ? text() : throttledText()}
+            cacheKey={`${part().id}-original`}
+            streaming={!translation() && streaming()}
+          />
+        </Show>
+        <Show when={translation()}>
+          <div style={{ "margin-top": "16px", "margin-bottom": "8px" }}>
+            <button
+              onClick={() => setShowOriginal((prev) => !prev)}
+              class="text-12-medium text-text-weak hover:text-text-base cursor-pointer flex items-center gap-1 transition-colors bg-transparent border-none p-0 outline-none"
+            >
+              <Icon name="chevron-down" size="small" class={showOriginal() ? "rotate-180" : ""} />
+              <span>{showOriginal() ? "Hide original" : "Show original"}</span>
+            </button>
+          </div>
+        </Show>
       </div>
     </Show>
   )

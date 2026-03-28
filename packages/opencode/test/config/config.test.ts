@@ -169,6 +169,42 @@ test("loads JSONC config file", async () => {
   })
 })
 
+test("loads global overaicoding JSONC config file", async () => {
+  await using globalTmp = await tmpdir({
+    init: async (dir) => {
+      await Filesystem.write(
+        path.join(dir, "overaicoding.jsonc"),
+        `{
+        "thinking_translation": {
+          "enabled": true,
+          "model": "test/model",
+          "target_language": "zh-CN"
+        }
+      }`,
+      )
+    },
+  })
+  await using tmp = await tmpdir()
+  const prev = Global.Path.config
+  ;(Global.Path as { config: string }).config = globalTmp.path
+  await Config.invalidate()
+  try {
+    await Instance.provide({
+      directory: tmp.path,
+      fn: async () => {
+        const config = await Config.get()
+        expect(config.thinking_translation?.enabled).toBe(true)
+        expect(config.thinking_translation?.model).toBe("test/model")
+        expect(config.thinking_translation?.target_language).toBe("zh-CN")
+      },
+    })
+  } finally {
+    await Instance.disposeAll()
+    ;(Global.Path as { config: string }).config = prev
+    await Config.invalidate()
+  }
+})
+
 test("merges multiple config files with correct precedence", async () => {
   await using tmp = await tmpdir({
     init: async (dir) => {

@@ -611,7 +611,8 @@ export namespace MessageV2 {
       return Object.keys(cleaned).length > 0 ? cleaned : undefined
     }
 
-    const toModelOutput = (output: unknown) => {
+    const toModelOutput = (options: { toolCallId: string; input: unknown; output: unknown }) => {
+      const output = options.output
       if (typeof output === "string") {
         return { type: "text", value: output }
       }
@@ -727,7 +728,7 @@ export namespace MessageV2 {
               const outputText = part.state.time.compacted
                 ? "[Old tool result content cleared]"
                 : (part.state.output ?? "")
-              const attachments = part.state.time.compacted ? [] : (part.state.attachments ?? [])
+              const attachments = part.state.time.compacted || options?.stripMedia ? [] : (part.state.attachments ?? [])
 
               // For providers that don't support media in tool results, extract media files
               // (images, PDFs) to be sent as a separate user message

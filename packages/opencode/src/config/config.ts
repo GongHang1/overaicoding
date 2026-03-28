@@ -1290,6 +1290,8 @@ export namespace Config {
             mergeDeep(yield* loadFile(path.join(Global.Path.config, "config.json"))),
             mergeDeep(yield* loadFile(path.join(Global.Path.config, "opencode.json"))),
             mergeDeep(yield* loadFile(path.join(Global.Path.config, "opencode.jsonc"))),
+            mergeDeep(yield* loadFile(path.join(Global.Path.config, "overaicoding.json"))),
+            mergeDeep(yield* loadFile(path.join(Global.Path.config, "overaicoding.jsonc"))),
           )
 
           const legacy = path.join(Global.Path.config, "config")
@@ -1360,10 +1362,12 @@ export namespace Config {
           }
 
           if (!Flag.OPENCODE_DISABLE_PROJECT_CONFIG) {
-            for (const file of yield* Effect.promise(() =>
-              ConfigPaths.projectFiles("opencode", ctx.directory, ctx.worktree),
-            )) {
-              result = mergeConfigConcatArrays(result, yield* loadFile(file))
+            for (const name of ["opencode", "overaicoding"]) {
+              for (const file of yield* Effect.promise(() =>
+                ConfigPaths.projectFiles(name, ctx.directory, ctx.worktree),
+              )) {
+                result = mergeConfigConcatArrays(result, yield* loadFile(file))
+              }
             }
           }
 
@@ -1381,7 +1385,7 @@ export namespace Config {
 
           for (const dir of unique(directories)) {
             if (dir.endsWith(".opencode") || dir === Flag.OPENCODE_CONFIG_DIR) {
-              for (const file of ["opencode.jsonc", "opencode.json"]) {
+              for (const file of ["opencode.jsonc", "opencode.json", "overaicoding.jsonc", "overaicoding.json"]) {
                 log.debug(`loading config from ${path.join(dir, file)}`)
                 result = mergeConfigConcatArrays(result, yield* loadFile(path.join(dir, file)))
                 result.agent ??= {}

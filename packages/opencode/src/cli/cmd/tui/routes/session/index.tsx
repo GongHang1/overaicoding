@@ -625,18 +625,35 @@ export function Session() {
         name: "translate-thinking",
         aliases: ["toggle-translation"],
       },
-      onSelect: (dialog) => {
-        import("@/session/translate")
-          .then(async ({ ThinkingTranslation }) => {
-            const enabled = await ThinkingTranslation.toggleEnabled()
-            toast.show({
-              message: enabled ? "Thinking translation enabled" : "Thinking translation disabled",
-              variant: "success",
-            })
+      onSelect: async (dialog) => {
+        try {
+          const currentConfig = sync.data.config.thinking_translation || {}
+          const enabled = !currentConfig.enabled
+
+          await sdk.client.config.update({
+            config: {
+              thinking_translation: {
+                ...currentConfig,
+                enabled,
+              },
+            },
           })
-          .catch((e) => {
-            toast.show({ message: "Failed to toggle translation", variant: "error" })
+
+          sync.set("config", (prev) => ({
+            ...prev,
+            thinking_translation: {
+              ...prev.thinking_translation,
+              enabled,
+            },
+          }))
+
+          toast.show({
+            message: enabled ? "Thinking translation enabled" : "Thinking translation disabled",
+            variant: "success",
           })
+        } catch (e) {
+          toast.show({ message: "Failed to toggle translation", variant: "error" })
+        }
         dialog.clear()
       },
     },
